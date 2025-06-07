@@ -1,70 +1,237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asignación de códigos a imágenes</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Generador de imágenes con códigos (CSS editable)</title>
+<link rel="stylesheet" href="styles.css" />
 <style>
-    #container {
-        display: flex;
-        flex-wrap: wrap;
-    }
-    .image-container {
-        position: relative;
-        margin: 10px;
-    }
-    .code {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        background-color: white;
-        padding: 5px;
-    }
+  /* Ejemplo básico para que puedas modificar en styles.css */
+  body {
+    font-family: Arial, sans-serif;
+  }
+  .image-wrapper {
+    position: relative;
+    display: inline-block;
+    margin: 10px;
+    width: 290px;
+    height: 100px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  .background-image {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    top: 0; left: 0;
+    z-index: 0;
+    border-radius: 8px;
+  }
+  .qr-image {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    /* Puedes cambiar el borde o sombra aquí */
+    border: 1px solid #000;
+    border-radius: 4px;
+  }
+  .logo-image {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    top: 5px;
+    right: 5px;
+    z-index: 20;
+    border-radius: 4px;
+  }
+  .code-text {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 16px;
+    color: black;
+    font-weight: bold;
+    z-index: 30;
+    /* Puedes cambiar fuente, color, sombra, etc. */
+    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+  }
 </style>
 </head>
 <body>
-    <input type="file" id="imageUpload" accept="application/pdf"><br><br>
-    <textarea id="codeInput" rows="5" cols="30" placeholder="Ingresa los códigos alfanuméricos"></textarea><br><br>
-    <button onclick="assignCodes()">Asignar Códigos</button><br><br>
-    <div id="container"></div>
+<h1>ahy que ver como esta asiganado los codigo para que no cargue un qr con otro que no iria (ahy que ver como los descarga en brotapp y darle un orden para que lo tome en ese orden )
+    
+</h1>
+<h2>Generador de imágenes con códigos</h2>
 
-    <script>
-        function assignCodes() {
-            var codes = document.getElementById("codeInput").value.split("\n");
-            var container = document.getElementById("container");
-            container.innerHTML = "";
+<input type="file" id="imageUpload" accept="image/*" /> Imagen de fondo<br><br>
 
-            var fileInput = document.getElementById('imageUpload');
-            var file = fileInput.files[0];
-            var reader = new FileReader();
+<input type="file" id="qrUpload" accept="image/*" multiple /> Imágenes QR (una por imagen)<br><br>
 
-            reader.onloadend = function () {
-                var imageBase64 = reader.result;
+<input type="file" id="logoUpload" accept="image/*" /> Imagen (esquina superior derecha)<br><br>
 
-                for (var i = 0; i < 100; i++) {
-                    var imageContainer = document.createElement("div");
-                    imageContainer.classList.add("image-container");
+<textarea id="codeInput" rows="5" cols="30" placeholder="Ingresa los códigos alfanuméricos, uno por línea"></textarea><br><br>
 
-                    var img = document.createElement("img");
-                    img.src = imageBase64;
-                    img.width = 100;
-                    img.height = 100;
+<label for="quantity">Cantidad de imágenes a generar:</label>
+<input type="number" id="quantity" name="quantity" min="1" value="3" /><br><br>
 
-                    var codeDiv = document.createElement("div");
-                    codeDiv.classList.add("code");
-                    codeDiv.innerText = codes[i % codes.length];
+<button onclick="assignCodes()">Asignar Códigos</button>
+<button onclick="downloadImages()">Descargar Imágenes</button><br><br>
 
-                    imageContainer.appendChild(img);
-                    imageContainer.appendChild(codeDiv);
+<div id="container"></div>
 
-                    container.appendChild(imageContainer);
-                }
-            }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-            if (file) {
-                reader.readAsDataURL(file);
-            }
+<script>
+  let imagesData = [];
+
+  function readFile(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function assignCodes() {
+    imagesData = [];
+    const container = document.getElementById("container");
+    container.innerHTML = "";
+
+    const codesRaw = document.getElementById("codeInput").value.split("\n");
+    const codes = codesRaw.map(c => c.trim()).filter(c => c !== "");
+    const quantity = parseInt(document.getElementById("quantity").value);
+
+    if (codes.length !== quantity) {
+      alert(`La cantidad de códigos (${codes.length}) debe ser exactamente igual a la cantidad de imágenes a generar (${quantity}).`);
+      return;
+    }
+
+    const baseFile = document.getElementById("imageUpload").files[0];
+    const qrFiles = document.getElementById("qrUpload").files;
+    const logoFile = document.getElementById("logoUpload").files[0];
+
+    if (!baseFile) {
+      alert("Por favor sube una imagen de fondo.");
+      return;
+    }
+
+    if (qrFiles.length !== quantity) {
+      alert(`Debes cargar exactamente ${quantity} imágenes QR.`);
+      return;
+    }
+
+    const baseSrc = await readFile(baseFile);
+    const logoSrc = logoFile ? await readFile(logoFile) : null;
+    const qrSrcArray = await Promise.all(Array.from(qrFiles).map(f => readFile(f)));
+
+    for (let i = 0; i < quantity; i++) {
+      const wrapper = document.createElement("div");
+      wrapper.classList.add("image-wrapper");
+
+      // Imagen de fondo
+      const bgImg = document.createElement("img");
+      bgImg.classList.add("background-image");
+      bgImg.src = baseSrc;
+      wrapper.appendChild(bgImg);
+
+      // QR imagen
+      const qrImg = document.createElement("img");
+      qrImg.classList.add("qr-image");
+      qrImg.src = qrSrcArray[i];
+      wrapper.appendChild(qrImg);
+
+      // Logo imagen (si existe)
+      if (logoSrc) {
+        const logoImg = document.createElement("img");
+        logoImg.classList.add("logo-image");
+        logoImg.src = logoSrc;
+        wrapper.appendChild(logoImg);
+      }
+
+      // Código texto
+      const codeDiv = document.createElement("div");
+      codeDiv.classList.add("code-text");
+      codeDiv.textContent = codes[i];
+      wrapper.appendChild(codeDiv);
+
+      container.appendChild(wrapper);
+
+      // Convertir wrapper a imagen para descarga
+      const dataUrl = await htmlToImage(wrapper);
+      imagesData.push({ src: dataUrl });
+    }
+  }
+
+  function htmlToImage(element) {
+    return new Promise((resolve) => {
+      const width = element.offsetWidth;
+      const height = element.offsetHeight;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      const bgImg = element.querySelector(".background-image");
+      const qrImg = element.querySelector(".qr-image");
+      const logoImg = element.querySelector(".logo-image");
+      const codeDiv = element.querySelector(".code-text");
+
+      const drawImage = (img, x, y, w, h) => new Promise(res => {
+        const i = new Image();
+        i.crossOrigin = "anonymous";
+        i.onload = () => {
+          ctx.drawImage(i, x, y, w, h);
+          res();
+        };
+        i.src = img.src;
+      });
+
+      const W = width;
+      const H = height;
+
+      (async () => {
+        await drawImage(bgImg, 0, 0, W, H);
+        await drawImage(qrImg, (W - 30) / 2, (H - 30) / 2, 30, 30);
+
+        if (logoImg) {
+          await drawImage(logoImg, W - 35, 5, 30, 30);
         }
-    </script>
+
+        ctx.font = "16px Arial";
+        ctx.fillStyle = "black";
+        ctx.fillText(codeDiv.textContent, 10, H - 10);
+
+        resolve(canvas.toDataURL("image/png"));
+      })();
+    });
+  }
+
+  function downloadImages() {
+    if (imagesData.length === 0) {
+      alert("No hay imágenes generadas.");
+      return;
+    }
+
+    const zip = new JSZip();
+    imagesData.forEach((item, idx) => {
+      const base64Data = item.src.split(',')[1];
+      zip.file(`imagen_${idx + 1}.png`, base64Data, { base64: true });
+    });
+
+    zip.generateAsync({ type: "blob" }).then(blob => {
+      saveAs(blob, "imagenes_generadas.zip");
+    });
+  }
+</script>
+
 </body>
 </html>
+

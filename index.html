@@ -1,89 +1,42 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Generador de imágenes con códigos (CSS editable)</title>
-<link rel="stylesheet" href="styles.css" />
-<style>
-  /* Ejemplo básico para que puedas modificar en styles.css */
-  body {
-    font-family: Arial, sans-serif;
-  }
-  .image-wrapper {
-    position: relative;
-    display: inline-block;
-    margin: 10px;
-    width: 290px;
-    height: 100px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background: #fafafa;
-  }
-  .background-image {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    top: 0; left: 0;
-    z-index: 0;
-    border-radius: 8px;
-  }
-  .qr-image {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10;
-    /* Puedes cambiar el borde o sombra aquí */
-    border: 1px solid #000;
-    border-radius: 4px;
-  }
-  .logo-image {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    top: 5px;
-    right: 5px;
-    z-index: 20;
-    border-radius: 4px;
-  }
-  .code-text {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    font-size: 16px;
-    color: black;
-    font-weight: bold;
-    z-index: 30;
-    /* Puedes cambiar fuente, color, sombra, etc. */
-    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Generador desde ZIP (QR + TXT)</title>
+ <link rel="stylesheet" href="estilo.css">
+
 </head>
 <body>
-<h1>ahy que ver como esta asiganado los codigo para que no cargue un qr con otro que no iria (ahy que ver como los descarga en brotapp y darle un orden para que lo tome en ese orden )
-    
-</h1>
-<h2>Generador de imágenes con códigos</h2>
+<div class="diseñoqr">
+<h2>Generador de imágenes (ZIP con QR + TXT)</h2>
 
-<input type="file" id="imageUpload" accept="image/*" /> Imagen de fondo<br><br>
+<label>Selecciona una imagen de fondo predeterminada:</label><br>
+<select id="presetBackground" onchange="showPresetPreview()">
+  <option value="">-- Ninguna --</option>
+  <option value="fondo1">Fondo 1</option>
+  <option value="fondo2">Fondo 2</option>
+  <option value="fondo3">Fondo 3</option>
+</select>
+<span id="previewLabel">Vista previa:</span>
+<div id="presetPreview"></div>
+<br><br>
+<button onclick="generateDefaultQR()">Mostrar QR predeterminado</button><br><br>
 
-<input type="file" id="qrUpload" accept="image/*" multiple /> Imágenes QR (una por imagen)<br><br>
 
-<input type="file" id="logoUpload" accept="image/*" /> Imagen (esquina superior derecha)<br><br>
+<br><br>
 
-<textarea id="codeInput" rows="5" cols="30" placeholder="Ingresa los códigos alfanuméricos, uno por línea"></textarea><br><br>
+<label>... o sube una personalizada:</label><br>
+<input type="file" id="imageUpload" accept="image/*" /><br><br>
 
-<label for="quantity">Cantidad de imágenes a generar:</label>
-<input type="number" id="quantity" name="quantity" min="1" value="3" /><br><br>
 
-<button onclick="assignCodes()">Asignar Códigos</button>
-<button onclick="downloadImages()">Descargar Imágenes</button><br><br>
+<input type="file" id="logoUpload" accept="image/*" /> Logo (esquina superior derecha)<br><br>
+<input type="file" id="qrZipUpload" accept=".zip" /> ZIP que contiene QR (.png) y un archivo .txt<br><br>
 
+<button onclick="assignCodes()">Generar Imágenes desde ZIP</button>
+<button onclick="downloadImages()">Descargar ZIP</button>
 <div id="container"></div>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -91,147 +44,264 @@
 <script>
   let imagesData = [];
 
-  function readFile(file) {
-    return new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    });
+
+
+  // Aquí agrega el base64 de tus fondos predeterminados (vacío por ahora)
+  const defaultBackgrounds = {
+    fondo1: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBw0PDxANDxAPDw0PDw8NDQ0NDw8NDQ0NFREWFhURFRUYHSggGBolGxUVLTMhJikrLi4uFx8/ODYtOiotMS4BCgoKDg0OFxAPGisdHR0rLS0tKy0tLS0tLSstLS0tLSstKy0tLS0tLS0tLS0tKy0rLS0rKy0tLS0tLSsrLS0tK//AABEIALcBEwMBEQACEQEDEQH/xAAbAAADAQEBAQEAAAAAAAAAAAAAAwQFAgYBB//EAEMQAAICAAIEBw0IAQIHAAAAAAABAgMEEQUSIdEGMVFTkZKTIiNBQkNSYXOhsbTS4QcTFDJxcoGisjPxFRYXRIPB8P/EABoBAQEBAQEBAQAAAAAAAAAAAAACAQMEBQb/xAAxEQEBAAEBBAgFBAMBAQAAAAAAAQIRAwQxURIUFSFBUmGhBRMi0eEjMmLwQnHBgbH/2gAMAwEAAhEDEQA/AP3EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+ZgGYNX0AGoAAAAAAD5mDUZhmozDRmAZgfRqAAAAAAAAAaj5mAZgGYNRmB9AAAAAAAAAABgZGN0u67JVqClq5bdbLblnyHx96+KXY7S4THXT1erZbt08elroUtOS5tdf6HGfGsvJ7/AIdOp/ydx0xLm11vob2xl5Pf8Ju6epsdKN+Iut9Cu18vJ7/hPVvV3/xF+aut9De1r5fdnV/VxLSjXiLrfQdq5eT3Or+pUtMteIut9B2tl5PdvVvUmfCCS8muu9xna2Xk9/wrqs5p58KZLyK7R7jO18vJ7/hvU/UiXDCXMLtX8o7Yy8nv+FTcvV9XC+fMR7R/KO2MvJ7/AIOpepkeFcn5Fdo/lHa+Xk9/wdT/AJGR4TSfkV2j3G9r5eT3/DOp/wAjI8IZc0uu9w7Xy8nv+GdT/kbHTkn5NdZ7h2vl5Pf8M6p6mR0xJ+Iut9B2tl5PdN3b1MjpN+Z/b6G9rXy+7Or+pix7fi+03tW+X3Z8j1dPHPzfaO1b5fdnyPUqWk2vFXW+hna18vurq/qVLTDXiLrfQzta+T3VN29S5ada8mus9w7Xvk9/w3qnq4lwgfNrrvcZ2vl5Pf8ACup/ycPhG15Jdf6G9r5eT3/B1P8Akmt4WuPkU/8AyP5TZ8Wt/wAPc6n/ACSWcOZR/wC3j2r+UrtO+X3Op+r12AxKuqruXFZCM8k88s1nkfVwy6WMy5vFlNLYoLYAAAAAADmU0uNpfq8iblJxuhozsdpeuCag1OfgUdsU+Vs+fvXxLY7KWY3WvRs92zyvf3R51ycm5Pa282+Vn5fLO525Zca+lJMZpCfvLZWShX93qwjDWlPWfdyzers5Fq9Y6zHGY65JtvgfCOJ5aerZvKny/VN1UQjiuWjq2by5Nn6uddS/FctHVs3lfQzQix4nlo6tm8z6PVUS2PEctPVs3mfR6tSWyv5auie8z6PVcQ3Sv5auie8z9P1XNU3fs+OvonvH6fqrvNhG/lq6s94/T9WfUfCN/LV0T3m/R6s71Ncb+WronvH6fqzSnwjiOWnqz3j9P1ZVEI4jlp6tm839P1RafCOJ5aOrZvN+j1RT4RxXLR1bN5X0MtOjHFctHVs3j6EVzZ+K5aOrZvFuDU03ieWjq2bybcFxPP8AE8tPVs3mfR6rhM/xHLT1Z7zPo9VQmX4jlq6J7zPo9V95F8r0uOronvKnQ9TSsrGW3pSfe20m0kppvJcXGdcZjU3WJLrU1mtqazT5UytNFPQ8EeF0MMvw2Jz+5z73ak5OrN7Ytcbj+nF7vpbpvXQnQzeTb7DpXpYv0DCaRw9yTqtqsT4vu5xl7j6szxy4V4bjZxiopgAAAAYGbprBytrWrlnF62T8bZxHzviW7ZbfZaYeHe9G77SYZa15iKPynC3R9S0n722UpwrjCOpJQdljcsm4RnmoJd1+ZeFHaY4yS5eKLVmEw6hHJNttuUpyycpzfHJ//ZLwC5asW1xKiLT1sLRqXYx3iayRneqJLZGariG6ZiogtlmY6PkEBRBAUQQYorRqbVMIhFPgikVRBGpPgjUU3iQE9kjLqqRNNmaukTzkYsiTMVC2zGoMVYXJRlYiZ1mrGPapR2RycPBFvVcf0fJ6DvO/ingldmslLlSfSXJpdGTveo+znQlt2KjjFlGnDTebe1zm4Nasf4lm3+h7Nz2NyzmfhHn3naSTR+tn13gAAAAAEWksaqYa2Wcm9WK8GeXhPHvu9Td9n0r490ddjsvmZaPLRR+Q43V9alYFd3iPXR+HqOuX7cf9f9qWhBGSIqmCOkiK7kymJ7GY2JbZBURXSMq4hvmYuJDFHQQD4IMqmtBiiCNTVEEaiqII1FUQRsTqdFGpfLJAiaxkriaxmV0kImzFQmTMWRfLJGwZeJnxnWQZeImdYxn3TOmMTWfW+4j+yPuR1vFke5+zHhAqrHgJxbV9jsqnHLubNTuoy9DUePee7c9r0b0Oby7zs9fqfqJ9N4gAAAABHpHBq6Gq3k1ti/Tl4Tyb5us2+z05d8ddjtbs8tXl4o/I6aWvqlaPXd4j10fh6jpf24/6/wC1DSrQiaoXEdHNxNhqayRikdsjFxFdMxUQXSMXHMEGnwQFNcQlRBGlUVoIqiCKRVEEag+CNTTUEkWMyqiaxmV0iebJWRNmLKkw1DirC5BlYiw6yDNvmdYyobZHTFKGt9xH9sfcXeLI999l+gI2SekJt95sddME8s56ndSl6MpbF+p7tz2Ut6d8Hk3naf4x+oH03jAAAAAGfpjEyrgtXjk9XPkWXGj53xLeM9jstcfF33fZzPLvedij8vOL6bjALu8R6+Pw9J1v7cf9f9rm064mxFdyZTIRZINiS2RiojukZVxBfMxUSvazFmQQFFaDKpriGKK4mpqiETUVRBGop8EbEnwRqRNgiWyRK4nmw6RPNkqJkzFk3SyRsGXiZnWQZeImdJGM+6R1jKitkXGJavyx/bH3F3iyPb/ZzpW6nExwqydOIk9aL8Wai3rR6Ejvum2ym06M4Vw3jCXHpcn6yfZfPAAAAACcVTCcXGSTXu9KOG8bLDaYWZ8FYZXG6x5aET8dp33/AG+s40eu+Yn18fh6TveGP98ahpxERXE2CJrJGKSWyMVEN0jFxDdIxccRQafCIFFaCVFcQVTCJqFEEUin1oIPgik05BJFkjKqJpyMrpE82SsibMXCmw1HirC5Bk4iZ1kYzb5nWCG2RcSknIuDjBx7mP7Y+43K95i/T/sw0dQ67MS1GV8bPu4t7XXHVTzXI3m9voPduGzx0uXi8e9ZXWTwe+PpvGAAAAAM3Tbmq1q55N5Ty83LwnzPimWc2X0c+/8A077vJcu9jQR+bn/x9CuNHLvmJ9fH4ak75cMf741ztXyMZCLGGxLbIxUR3SMq0F0zFRI9rMWZBAPhEMqmtBimCNTVEEbEU+CNRVEEag+CNYJsETWMlcTTYXCJslZEmYuFWyyRsGXiZnSQZeImdpGM++R0jEVsi4xOyoynYGHcR/bH3E53vVjwex4CTujjK41uepLP75RTcXBReTl/OW30+k6bnnl82dHh4uG8zHod/F+rI+++aAAAAAF3zioty/Lk88+TkOW2yxmFufBuMtvc85BH5Dx7vF9Sl6P/AD4n18fhqTreE/vjXNTJktT2SMUjtkFSIrpEriC6Ri5HEUGnQQFNaCVFcQKK0aiqK0VEVRBGop8EamnIJJsZipE05GOkiebJXInnILhbMaixNhcgysRYdcRm3zOkZqgtkdJEpbGXBzUs2LRXgY9xD9sfccs731uPB+l/ZvbUq7a9ivc1JrxpV6qSy5Unn0+k+l8Nyx0s8Xi3uXWXwe1PqvGAAAAAIdK0ynBau3Ves14csj5vxLY5bTZTo+He7bDKY5d7KrifnZO//T3WkYP/AFMV6+Pw1J2y4Y/3xqIbYyFJbZGKiO6RlUgumYuI282YuGQQD60GVTWgxRCJrLVEEbIiqII1Fp8EainwRqXU2CJbJGLiacjFwibJXITJmLKslkgMvEzOuIy8RM6xjOumdJEo7JHSCaTKFNECLW6K8BHvcP2R9yOWf7m48HreBWAsniYXRj3ultzk9iWcWklyvaejcNnnltZlOE4uG85yYaeNfph+hfMAAAAACcTeoRzf6JcrPPvO3x2OFuS8MLldIxoo/LPdw7kOEffMV6+Pw1JWXCf3xpHdkiF6JLZBWiK6RK5EF0zFyFRQafCIFFaCVFcQKa4motUQRURafWjUqII1FOigkmyRlVE1kguRPNk2ukhE2YuFMxqTFWFSDJxFh1xGbfM6yM1QXSOkiUlki4Oa45sWmi6iBytUpwEe91/sh/ijntP3Uj3vALSVcFLCy2TnPXreWyT1UnF8j7k+l8N2+M12d414972d/c9ufYjwg0AAAATY3D68dj2rauRni33d/nYaTw73TZ59Gsln5vh3PdxZ2GffMT6+Pw1JWXCf3xpI+2yIWjukZVIb5GLiKTzZi3cEA+tBlU1xDFMEayqII2Ip8EahRBGpPgjUV1N7ARNYzFyJpsxciebJXITJmLhVkskaM3E2HTGDKxEzrIxnXzOkjKitkXGJpMsUUQIyrYvpicvFp+j497r/AGQ/xRzz/dScHsuBWipWWLFN5QqllFeGc9Xav0SZ7vh279PObXwxebe9rpOhze9R96PnA0AAAMCfF36kc/C9i9B4983j5Oz15umzw6WTGmz81e+63xe5mYZ98xPr4/DUlZcJ/fGtgtkQtFdIlcQXzMXCYoNPggH1oJU1xAorRqVFaKRVEEag+CCadFGoLsZlVE1kguJpsmrhE2Y6QpsNS4mZsgycRYdZBm3zOsiUFsjpIxHZIvQcQWbFF9MDla2LaYnLXvUbo+Peq/Vw/wAUTtP3UnB7DgZpOVdiwzWcLZZp8ThPV2/qml7D3/Dt56Gc2V/y4PLvWy1nT5Pdn33zgAAAAArEUqayf8PkZ5942OO1wsqsMrjdYwLGflrNLZ6voTvZVEu7xPr4/D0lZcMf741UfLpHOrQ3yJXEM3mwt3BAPggyqa0GKIIMUQRqKogiohRBBJ0EUl3J7AyJ7JGLiWbMXCJslcIkzFlWSyRozsTYXjBlYiZ2jGddM6QqK2RcSmky2HUQIyrYvpicbVLaonPxa70eu9V+rh/ijNp+6k4PbcCdG1y1sTLbOE9StZ7I9ys5e0+p8L2GOX6t4zg8e+bSy9GPYn23gAAAADAk0hOSj3Oe15PJNvLI8G/7TaY7P9OcXXZSXLvYNkj87e7ur38eDLxGHkpTnXZKEptScWozqlJRUVmuPiiuJriKmc00ybImrxDmnmtWcXqzjnmlLLPY/Cmmmn6SM5oqJr5kOkIigo6CAohEJU1xAorRqFEEUmqII1B8EamnRQQ4skFRLYyVxPNmVcTzZjpCmzGpsTM2DKxNh2xgzL5nWJrPukXGJLJHSBcVmxRbRA5WtX1ROVqndKnPulJwh4qilrSXnNtbF6P9hbMe7xOK2mtRjGK4opRXh2JZHHLLW6qkej4JXXwvjGCk6bHlZ3LcNieTz8DPofDs9pjtJJPpry73MLjreL3iP0MfMfTQAAAAAS4zBwsTTWUvBJcaf/s8u8brhtsbLO/mvDaXGvJYuLhKUJbHFtM/M7TC4ZXC+D6eNmU1jHxVctdzjPV1oxjJaqknqt5P2+wyZzTSxWiKcLW/9Rdmt46WHJcldQqt5xdmt46WHI0p0KbecXZreOlhyNKohRbzq7Jbx0sOTNKohTdzq7Jbx0seTNKohTdzq7JbzeljyR3nwov55dlHeb0seSafDD388uxjvN1x5IOhRfzy7GO8rpY8kmSpxHPrsY7x0seTPFPZVfzy7GO8npY8lyJ51X88uyW8zpY8lxPOu7nV2S3mdLDkvv5kyru51dkt5nSx5K0pUq7udXZLeOlhybpUGJVvOrs1vOkuPJmlZmIVnOLqLedJceRpWfdr+f8A1W86SzkzvRW6/nf1Rcs5MTSUvO/qVrDvNoql539UTcoSVdTVPz/6o5XKclaVUqJtOLnkmmnlBZ5P+Tn05Lwbo0K4nDK9+q49nwV0BCUFiboqWttqrltio+c14T7G4bljcfmbTv14R4N52916OL10Vls8HJyH2ZJODwvpoAAAAAAAAy8boWu6bnKU03lmouOWxZeFHz9v8O2e2zudtmrtht8sJpEcuCtL8pb0w3HLsnZea+32det58oX/AMn0c5d01/KOyNl5r7fZvXM+UdrgnQvKW9MPlHZOy819vszrmfKO1wXpXj29MNw7J2Xmvt9jrmfKO48HKV49nTDcOydl5r7fZnW8+UMWgKvOn0x3DsnZea+32Ot58o7WhK/On/Xcb2Tsud9vsnrWXJ2tEwXjS9m4dlbLnfb7M6xk7WjYcsvYOytl5r/f/GfPydrAx5Zew3svZc6fOr5LARfhl7B2VsudPn5Fy0XB+NL2bjOytn5r7fZs3jJw9DQfjT/ruM7K2fO+32VN5y5OHoKvz5/13DsnZc77fZvW83D4P1efZ0x3DsnZea+32Ot58o5nwbqfj2/w4bh2TsvNfb7HW8+UT2cEKJeUu6a/lKnwvZz/ACp1vPlE8+AuGflb+mr5SuzNn5r/AH/w63nyhE/s8wr8tiOmr5TezsJ4063lyhUvs0wb8viemn5DeoYc6dbzcf8ATHBc/iumn5DeoYc6zrWXI2H2b4NeWxPTT8hN+HYeat63lyh0eAGFXlcR01fKT2Zs/Nfb7N63nyhseA2GXlb+mv5TL8K2fmvt9jrmfKO1wLw/OXdNfymdk7PzX2+x1zPlHosNSq4RrX5YRjBZ8eSWR9LDHo4zGeDy263WmlMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/9k=", // "data:image/png;base64,..."  
+    fondo2: "data:image/jpeg;base64,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", 
+    fondo3: "data:image/jpeg;base64,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"
+  };
+
+  // Aquí pon el base64 de tu QR predeterminado (como string, sin poner el contenido aquí)
+  const defaultQR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALoAAAC6CAMAAAAu0KfDAAAABlBMVEX///8AAABVwtN+AAABxklEQVR4nO3QUZKDQAwD0eT+l94DgJQeCAXOtr4oGKzneb2MMebivHHSX31mbzljkC5d+hT6tj6dIcuQ+vRMDNKlS59I5zX9ZKKQ98QgXbr0X6X3f9P5NEG6dOnSSTGnk6/SpUv/PXrHEXpHHLsa6dKlT6cfq/nuMzdIly59Cv18SMGF9Wci/Y5IvyM301N9quxEshJZAy0sXbr0x9NJWRqXWH2NnnQR0qVLn0XvUL79KqVfFmmULl36FHpC9xBoByFi+ipduvQh9D4ivUllqwvwq5EuXfpEOjoK6NsJxy6iLyxduvRZ9M4lX8mSx7rieenSpQ+hry6z/TdVrl5E/1e6dOmz6H2B/kyI6TmtmhaLy0iXLv3B9FXWauXq5NSyE+nSpT+enupTyEoESto/oKVLl/54emKREemvPqf/tWCQLl36EHpfKYWc54vxLunSpU+hr2Zbn3Dkfb+yPkG6dOnPp79xTtWErmPXIV269Fn0nQ/hTHomK5FeflK6dOmz6O9N+Lgz6/XsoKVLl/6j9PS1V/LFert06dL/A31nUM13J0iXLn0inRfz9JnbM/3ipEuXPpF+DEGInN5bpEuXPpFujDEX5A/WVTvF1c+o+gAAAABJRU5ErkJggg==";
+
+  function showPresetPreview() {
+    const select = document.getElementById("presetBackground");
+    const previewDiv = document.getElementById("presetPreview");
+    const val = select.value;
+    if (val && defaultBackgrounds[val]) {
+      previewDiv.style.backgroundImage = `url(${defaultBackgrounds[val]})`;
+    } else {
+      previewDiv.style.backgroundImage = "none";
+    }
   }
 
+  let customBackground = null;
+  let logoImage = null;
+  let qrZip = null;
+
+  document.getElementById("imageUpload").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      customBackground = evt.target.result;
+      document.getElementById("presetBackground").value = "";
+      showPresetPreview();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("logoUpload").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      logoImage = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("qrZipUpload").addEventListener("change", e => {
+    qrZip = e.target.files[0];
+  });
+
   async function assignCodes() {
-    imagesData = [];
+    if (!qrZip) {
+      alert("Por favor, selecciona el archivo ZIP con los QR y TXT.");
+      return;
+    }
+
     const container = document.getElementById("container");
     container.innerHTML = "";
+    imagesData = [];
 
-    const codesRaw = document.getElementById("codeInput").value.split("\n");
-    const codes = codesRaw.map(c => c.trim()).filter(c => c !== "");
-    const quantity = parseInt(document.getElementById("quantity").value);
+    const zip = await JSZip.loadAsync(qrZip);
 
-    if (codes.length !== quantity) {
-      alert(`La cantidad de códigos (${codes.length}) debe ser exactamente igual a la cantidad de imágenes a generar (${quantity}).`);
+    const txtFile = Object.values(zip.files).find(f => !f.dir && f.name.toLowerCase().endsWith(".txt"));
+    if (!txtFile) {
+      alert("El ZIP no contiene un archivo .txt con códigos.");
       return;
     }
 
-    const baseFile = document.getElementById("imageUpload").files[0];
-    const qrFiles = document.getElementById("qrUpload").files;
-    const logoFile = document.getElementById("logoUpload").files[0];
+    const codesText = await txtFile.async("string");
+    const codes = codesText.split("\n").map(c => c.trim()).filter(c => c);
 
-    if (!baseFile) {
-      alert("Por favor sube una imagen de fondo.");
-      return;
+    // Mapear QR por nombre (sin extensión)
+    const qrMap = new Map();
+    for (const file of Object.values(zip.files)) {
+      if (!file.dir && /\.(png|jpg|jpeg)$/i.test(file.name)) {
+        const baseName = file.name.split(/[/\\]/).pop().replace(/\.[^/.]+$/, "").toUpperCase();
+        qrMap.set(baseName, file);
+      }
     }
 
-    if (qrFiles.length !== quantity) {
-      alert(`Debes cargar exactamente ${quantity} imágenes QR.`);
-      return;
+    // Verificar que cada código tenga su QR correspondiente
+    for (const code of codes) {
+      if (!qrMap.has(code.toUpperCase())) {
+        alert(`No se encontró un archivo QR que coincida con el código: "${code}"`);
+        return;
+      }
     }
 
-    const baseSrc = await readFile(baseFile);
-    const logoSrc = logoFile ? await readFile(logoFile) : null;
-    const qrSrcArray = await Promise.all(Array.from(qrFiles).map(f => readFile(f)));
+    // Obtener el fondo
+    let bgImage = null;
+    if (customBackground) bgImage = customBackground;
+    else {
+      const sel = document.getElementById("presetBackground").value;
+      if (sel && defaultBackgrounds[sel]) bgImage = defaultBackgrounds[sel];
+    }
 
-    for (let i = 0; i < quantity; i++) {
+    // Construir imágenes y guardarlas en imagesData
+    for (const code of codes) {
+      const qrFile = qrMap.get(code.toUpperCase());
+      const base64Data = await qrFile.async("base64");
+      const qrSrc = "data:image/png;base64," + base64Data;
+
+      // Crear visualización
       const wrapper = document.createElement("div");
-      wrapper.classList.add("image-wrapper");
+      wrapper.className = "image-wrapper";
 
-      // Imagen de fondo
-      const bgImg = document.createElement("img");
-      bgImg.classList.add("background-image");
-      bgImg.src = baseSrc;
-      wrapper.appendChild(bgImg);
+      if (bgImage) {
+        const bg = document.createElement("img");
+        bg.src = bgImage;
+        bg.className = "background-image";
+        wrapper.appendChild(bg);
+      } else {
+        wrapper.style.background = "#eee";
+      }
 
-      // QR imagen
       const qrImg = document.createElement("img");
-      qrImg.classList.add("qr-image");
-      qrImg.src = qrSrcArray[i];
+      qrImg.src = qrSrc;
+      qrImg.className = "qr-image";
       wrapper.appendChild(qrImg);
 
-      // Logo imagen (si existe)
-      if (logoSrc) {
+      if (logoImage) {
         const logoImg = document.createElement("img");
-        logoImg.classList.add("logo-image");
-        logoImg.src = logoSrc;
+        logoImg.src = logoImage;
+        logoImg.className = "logo-image";
         wrapper.appendChild(logoImg);
       }
 
-      // Código texto
-      const codeDiv = document.createElement("div");
-      codeDiv.classList.add("code-text");
-      codeDiv.textContent = codes[i];
-      wrapper.appendChild(codeDiv);
+      const txt = document.createElement("div");
+      txt.className = "code-text";
+      txt.textContent = code;
+      wrapper.appendChild(txt);
 
       container.appendChild(wrapper);
 
-      // Convertir wrapper a imagen para descarga
-      const dataUrl = await htmlToImage(wrapper);
-      imagesData.push({ src: dataUrl });
+      imagesData.push({
+        code,
+        qr: qrSrc,
+        background: bgImage,
+        logo: logoImage
+      });
     }
   }
 
-  function htmlToImage(element) {
-    return new Promise((resolve) => {
-      const width = element.offsetWidth;
-      const height = element.offsetHeight;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-
-      const bgImg = element.querySelector(".background-image");
-      const qrImg = element.querySelector(".qr-image");
-      const logoImg = element.querySelector(".logo-image");
-      const codeDiv = element.querySelector(".code-text");
-
-      const drawImage = (img, x, y, w, h) => new Promise(res => {
-        const i = new Image();
-        i.crossOrigin = "anonymous";
-        i.onload = () => {
-          ctx.drawImage(i, x, y, w, h);
-          res();
-        };
-        i.src = img.src;
-      });
-
-      const W = width;
-      const H = height;
-
-      (async () => {
-        await drawImage(bgImg, 0, 0, W, H);
-        await drawImage(qrImg, (W - 30) / 2, (H - 30) / 2, 30, 30);
-
-        if (logoImg) {
-          await drawImage(logoImg, W - 35, 5, 30, 30);
-        }
-
-        ctx.font = "16px Arial";
-        ctx.fillStyle = "black";
-        ctx.fillText(codeDiv.textContent, 10, H - 10);
-
-        resolve(canvas.toDataURL("image/png"));
-      })();
-    });
-  }
-
-  function downloadImages() {
+  async function downloadImages() {
     if (imagesData.length === 0) {
-      alert("No hay imágenes generadas.");
+      alert("Primero genera las imágenes.");
       return;
     }
 
     const zip = new JSZip();
-    imagesData.forEach((item, idx) => {
-      const base64Data = item.src.split(',')[1];
-      zip.file(`imagen_${idx + 1}.png`, base64Data, { base64: true });
-    });
+    for (let i = 0; i < imagesData.length; i++) {
+      const { code, qr, background, logo } = imagesData[i];
 
-    zip.generateAsync({ type: "blob" }).then(blob => {
-      saveAs(blob, "imagenes_generadas.zip");
+      // Crear canvas para componer la imagen
+      const canvas = document.createElement("canvas");
+      canvas.width = 290;
+      canvas.height = 100;
+      const ctx = canvas.getContext("2d");
+
+      // Dibujar fondo
+      if (background) {
+        const imgBg = await loadImage(background);
+        ctx.drawImage(imgBg, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = "#eee";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Dibujar QR
+      if (qr) {
+        const imgQR = await loadImage(qr);
+        // Centrar 30x30
+        const qrSize = 30;
+        ctx.drawImage(imgQR, (canvas.width - qrSize) / 2, (canvas.height - qrSize) / 2, qrSize, qrSize);
+      }
+
+      // Dibujar logo
+      if (logo) {
+        const imgLogo = await loadImage(logo);
+        const logoSize = 30;
+        ctx.drawImage(imgLogo, canvas.width - logoSize - 5, 5, logoSize, logoSize);
+      }
+
+      // Dibujar texto
+      ctx.font = "bold 16px Arial";
+      ctx.fillStyle = "black";
+      ctx.textBaseline = "bottom";
+      ctx.shadowColor = "rgba(255,255,255,0.8)";
+      ctx.shadowBlur = 3;
+      ctx.fillText(code, 10, canvas.height - 10);
+
+      // Obtener base64 y agregar al ZIP
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64 = dataUrl.replace(/^data:image\/(png|jpg);base64,/, "");
+      zip.file(`${code}.png`, base64, { base64: true });
+    }
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, "images.zip");
+  }
+
+  function loadImage(src) {
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => res(img);
+      img.onerror = e => rej(e);
+      img.src = src;
     });
   }
-</script>
 
+  // Mostrar QR predeterminado
+  function generateDefaultQR() {
+    const container = document.getElementById("container");
+    container.innerHTML = "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-wrapper";
+
+    let bgImage = null;
+    if (customBackground) bgImage = customBackground;
+    else {
+      const sel = document.getElementById("presetBackground").value;
+      if (sel && defaultBackgrounds[sel]) bgImage = defaultBackgrounds[sel];
+    }
+
+    if (bgImage) {
+      const bg = document.createElement("img");
+      bg.src = bgImage;
+      bg.className = "background-image";
+      wrapper.appendChild(bg);
+    } else {
+      wrapper.style.background = "#eee";
+    }
+
+    const qrImg = document.createElement("img");
+    qrImg.src = defaultQR;
+    qrImg.className = "qr-image";
+    wrapper.appendChild(qrImg);
+
+    if (logoImage) {
+      const logoImg = document.createElement("img");
+      logoImg.src = logoImage;
+      logoImg.className = "logo-image";
+      wrapper.appendChild(logoImg);
+    }
+
+    const txt = document.createElement("div");
+    txt.className = "code-text";
+    txt.textContent = "QR Predeterminado";
+    wrapper.appendChild(txt);
+
+    container.appendChild(wrapper);
+  }
+</script>
+</div>
 </body>
 </html>
-
